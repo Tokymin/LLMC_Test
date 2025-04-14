@@ -8,8 +8,9 @@ import os
 
 from datasets import load_dataset
 from loguru import logger
-
-
+import os
+os.environ['HF_ENDPOINT'] = 'hf-mirror.com'
+# 在代码中添加代理设置（或在终端中设置环境变量）
 def download(calib_dataset_name, path):
     if 'c4' in calib_dataset_name:
         calib_dataset = load_dataset(
@@ -21,7 +22,7 @@ def download(calib_dataset_name, path):
         calib_dataset.save_to_disk(save_path)
         logger.info('download c4 for eval finished.')
     if 'wikitext2' in calib_dataset_name:
-        calib_dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+        calib_dataset = load_dataset('/mnt/share/toky/Datasets/LLMC/Salesforce/wikitext', 'wikitext-2-raw-v1', split='test')
         save_path = os.path.join(path, 'wikitext2')
         calib_dataset.save_to_disk(save_path)
         logger.info('download wikitext2 for eval finished.')
@@ -37,8 +38,8 @@ def download(calib_dataset_name, path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--dataset_name', type=str, default=['c4', 'wikitext2', 'ptb'], nargs='*'
-    )
+        '--dataset_name', type=str, default=['wikitext2'], nargs='*'
+    )#'c4', , 'ptb'
     parser.add_argument('--save_path', type=str, required=True)
     args = parser.parse_args()
     logger.info(f'args : {args}')

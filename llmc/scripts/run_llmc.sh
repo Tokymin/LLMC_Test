@@ -1,8 +1,9 @@
 #!/bin/bash
-
+# 显式指定Python解释器路径（关键修改！！！）
+PYTHON=/mnt/share/toky/CondaEnvs/LLMC/bin/python
 # export CUDA_VISIBLE_DEVICES=0,1
 
-llmc=/path/to/llmc
+llmc=/mnt/share/toky/Projects/LLMC_Test/llmc
 export PYTHONPATH=$llmc:$PYTHONPATH
 
 task_name=awq_w_only
@@ -29,7 +30,7 @@ MASTER_PORT=$UNUSED_PORT
 task_id=$UNUSED_PORT
 
 nohup \
-torchrun \
+/mnt/share/toky/CondaEnvs/LLMC/bin/python -m torch.distributed.run \
 --nnodes $nnodes \
 --nproc_per_node $nproc_per_node \
 --rdzv_id $task_id \

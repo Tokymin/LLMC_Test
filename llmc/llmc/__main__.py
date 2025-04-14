@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 import yaml
 from easydict import EasyDict
+print("easydict")
 from loguru import logger
 from torch.distributed import destroy_process_group, init_process_group
 

@@ -8,11 +8,12 @@ import os
 
 from datasets import load_dataset
 from loguru import logger
-
+import os
+os.environ['HF_ENDPOINT'] = 'alpha.hf-mirror.com'
 
 def download(calib_dataset_name, path):
     if 'pileval' in calib_dataset_name:
-        calib_dataset = load_dataset('mit-han-lab/pile-val-backup', split='validation')
+        calib_dataset = load_dataset('/mnt/share/toky/Datasets/LLMC/mit-han-lab/pile-val-backup', split='validation')
         save_path = os.path.join(path, 'pileval')
         calib_dataset.save_to_disk(save_path)
         logger.info('download pileval for calib finished.')
@@ -51,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dataset_name',
         type=str,
-        default=['pileval', 'c4', 'wikitext2', 'ptb', 'ultrachat'],
+        default=['pileval'],#, 'c4', 'wikitext2', 'ptb', 'ultrachat'
         nargs='*',
     )
     parser.add_argument('--save_path', type=str, required=True)
