@@ -5,7 +5,7 @@ __pycache__/
 .idea
 # C extensions
 *.so
-
+llmc_quantized
 # Distribution / packaging
 .Python
 build/

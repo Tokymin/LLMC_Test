@@ -40,6 +40,7 @@ quant:
         # For 2-bit quantization, setting "clip_sym: False" will yield better results.
         clip_sym: True
 save:
-    save_trans: False
+    save_trans: True
     save_fake: False
+    save_vllm: True
     save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/Qwen2-0.5B
