@@ -43,8 +43,8 @@ def check_config(config):
                 check_weight_setting(weight_setting)
     if config.model.get('tokenizer_mode', False):
         assert (
-            config.model.tokenizer_mode == 'slow'
-            or config.model.tokenizer_mode == 'fast'
+                config.model.tokenizer_mode == 'slow'
+                or config.model.tokenizer_mode == 'fast'
         ), 'Tokenizer_mode should be slow or fast.'
         logger.info(f'Tokenizer_mode is set to {config.model.tokenizer_mode}.')
     else:
@@ -78,14 +78,15 @@ def print_important_package_version():
 
 
 def get_modality(config):
+    """检查配置中是否存在视觉和语言模态的压缩配置，若存在则将其收集起来；若不存在任何特定模态，就默认使用语言模态。"""
     modalities = []
     modality_configs = []
     compression_config = config.quant if 'quant' in config else config.sparse
-    for modality in ['vision', 'language']:
+    for modality in ['vision', 'language']:  # 遍历可能的模态列表，这里包含 'vision'（视觉）和 'language'（语言）
         if modality in compression_config:
             compression_config[modality].modality = modality
             modalities.append(modality)
-            modality_configs.append(compression_config[modality])
+            modality_configs.append(compression_config[modality])  # 将当前模态的配置添加到 modality_configs 列表中
     if not modalities:
         compression_config.modality = 'language'
         return ['language'], [compression_config]

@@ -1,8 +1,8 @@
 base:
     seed: &seed 42
 model:
-    type: SmolLM
-    path: /mnt/share/toky/LLMs/SmolLM-135M-Instruct/
+    type: SmolVLM2
+    path: /mnt/share/toky/LLMs/SmolVLM2-2.2B-Instruct/
     tokenizer_mode: slow
     torch_dtype: auto
 calib:
@@ -30,7 +30,7 @@ quant:
         bit: 4
         symmetric: True
         granularity: per_group
-        group_size: 192 #for smollm 调整为192，其他的暂时是128，需要调节的数值：576，1536
+        group_size: 128
     special:
         trans: True
         # The options for "trans_version" include "v1" and "v2".
@@ -43,4 +43,4 @@ save:
     save_trans: True
     save_fake: False
     save_vllm: True
-    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/SmolLM-135M-Instruct
+    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/SmolVLM2

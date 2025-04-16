@@ -24,6 +24,7 @@ from .qwen2audio import Qwen2Audio
 from .qwen2moe import Qwen2Moe
 from .qwen2vl import Qwen2VL
 from .smollm import SmolLM
+from .smolvlm2 import SmolVLM2
 from .stablelm import StableLm
 from .starcoder import Starcoder
 from .vila import Vila

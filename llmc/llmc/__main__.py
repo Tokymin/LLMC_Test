@@ -9,7 +9,6 @@ import torch
 import torch.distributed as dist
 import yaml
 from easydict import EasyDict
-print("easydict")
 from loguru import logger
 from torch.distributed import destroy_process_group, init_process_group
 
@@ -26,77 +25,75 @@ from llmc.utils.registry_factory import ALGO_REGISTRY, MODEL_REGISTRY
 
 
 def main(config):
+    # print("已注册的模型类型:", list(MODEL_REGISTRY.register))
     model = MODEL_REGISTRY[config.model.type](config)
-
     logger.info(f'model: {model}')
     logger.info(f'tokenizer: {model.get_tokenizer()}')
-
-    blockwise_opts = []
-    modalities, modality_configs = get_modality(config)
-    for modality, modality_config in zip(modalities, modality_configs):
-        model.set_modality(modality)
-        eval_list = get_eval_list(model, config)
+    blockwise_opts = []  # 初始化一个空列表，用于存储块级优化器实例
+    modalities, modality_configs = get_modality(config)  # 从配置中获取模态信息和对应的模态配置，模态：视觉or文本
+    for modality, modality_config in zip(modalities, modality_configs):  # 遍历每种模态及其配置
+        model.set_modality(modality)  # 设置模型的当前模态
+        eval_list = get_eval_list(model, config)  # 获取评估列表，用于后续的模型评估
         eval_model(model, None, eval_list, eval_pos='pretrain')
-        if not config.get('calib', False):
-            blockwise_opt = ALGO_REGISTRY[modality_config.method](
+        if not config.get('calib', False):  # 如果配置中没有设置 'calib' 为 True
+            blockwise_opt = ALGO_REGISTRY[modality_config.method](  # 根据模态配置中的方法，从 ALGO_REGISTRY 字典中获取对应的块级优化器实例
                 model,
                 modality_config,
                 input=None,
                 padding_mask=None,
                 config=config,
             )
-            blockwise_opt.run_block_loop()
-            blockwise_opts.append(blockwise_opt)
-            dist.barrier()
-        else:
+            blockwise_opt.run_block_loop()  # 运行块级优化循环
+            blockwise_opts.append(blockwise_opt)  # 将块级优化器实例添加到列表中
+            dist.barrier()  # 同步所有进程
+        else:  # 创建一个 BaseDataset 实例，用于加载校准数据集
             dataset = BaseDataset(
                 model.get_tokenizer(), config.calib, model.batch_process
             )
-            calib_data, padding_mask = dataset.get_calib_dataset()
-            model.collect_first_block_input(calib_data, padding_mask)
-            del calib_data
+            calib_data, padding_mask = dataset.get_calib_dataset()  # 从数据集中获取校准数据和填充掩码
+            model.collect_first_block_input(calib_data, padding_mask)  # 收集模型的第一个块的输入
+            del calib_data  # 删除校准数据，释放内存
             gc.collect()
-            torch.cuda.empty_cache()
+            torch.cuda.empty_cache()  # 清空 CUDA 缓存
             blockwise_opt = ALGO_REGISTRY[modality_config.method](
+                # 根据模态配置中的方法，从 ALGO_REGISTRY 字典中获取对应的块级优化器实例，并传入第一个块的输入和填充掩码
                 model,
                 modality_config,
                 model.get_first_block_input(),
                 model.get_padding_mask(),
                 config,
             )
-            blockwise_opt.run_block_loop()
+            blockwise_opt.run_block_loop()  # 运行块级优化循环
             blockwise_opts.append(blockwise_opt)
-            dist.barrier()
+            dist.barrier()  # 同步所有进程
 
     eval_model(model, blockwise_opts, eval_list, eval_pos='transformed')
     if int(os.environ['RANK']) == 0:
         if 'save' in config and config.save.get('save_trans', False):
-            blockwise_opt.save_model(save_trans_path)
+            blockwise_opt.save_model(save_trans_path)  # 保存模型的转换版本
 
         if 'save' in config and config.save.get('save_trtllm', False):
             blockwise_opt.save_model(save_trtllm_trans_path)
             from llmc.utils.export_trtllm import cvt_trtllm_engine
-
-            cvt_trtllm_engine(
+            cvt_trtllm_engine(  # 将 TensorRT-LLM 转换版本的模型转换为 TensorRT-LLM 引擎
                 save_trtllm_trans_path,
                 save_trtllm_engine_path,
                 config.save.get('trtllm_cfg'),
             )
 
-        eval_model(model, blockwise_opts, eval_list, eval_pos='fake_quant')
-        eval_model(model, blockwise_opts, eval_list, eval_pos='fake_quant_wo_kv')
+        eval_model(model, blockwise_opts, eval_list, eval_pos='fake_quant')  # 在伪量化阶段对模型进行评估
+        eval_model(model, blockwise_opts, eval_list, eval_pos='fake_quant_wo_kv')  # 在不考虑键值对的伪量化阶段对模型进行评估
 
         if 'save' in config and config.save.get('save_fake', False):
-            deploy_all_modality(blockwise_opts, 'fake_quant')
-            blockwise_opt.save_model(save_fake_path)
-
-        if 'save' in config:
+            deploy_all_modality(blockwise_opts, 'fake_quant')  # 部署所有模态的伪量化模型
+            blockwise_opt.save_model(save_fake_path)  # 保存伪量化模型
+        if 'save' in config:  # 如果需要保存 vllm、sgl 或 lightllm 量化模型
             if (
-                config.save.get('save_vllm', False)
-                or config.save.get('save_sgl', False)
-                or config.save.get('save_lightllm', False)
+                    config.save.get('save_vllm', False)
+                    or config.save.get('save_sgl', False)
+                    or config.save.get('save_lightllm', False)
             ):
-                for modality_config in modality_configs:
+                for modality_config in modality_configs:  # 遍历每种模态配置
                     w, a = modality_config.weight, modality_config.get('act')
 
                     if isinstance(w.bit, str):
@@ -104,12 +101,12 @@ def main(config):
                         assert w.bit in ['e4m3', 'e3m4'], 'Supported quant: w8a16.'
                         if a:
                             assert (
-                                w.symmetric and a.symmetric
+                                    w.symmetric and a.symmetric
                             ), 'Only symmetric quant is supported.'
                             assert (
-                                w.bit == a.bit
-                                and w.bit in ['e4m3', 'e5m2']
-                                and a.bit in ['e4m3', 'e5m2']
+                                    w.bit == a.bit
+                                    and w.bit in ['e4m3', 'e5m2']
+                                    and a.bit in ['e4m3', 'e5m2']
                             ), 'Only WA FP8 quant is supported'
                     else:
                         assert w.symmetric, 'Only symmetric quant is supported.'
@@ -131,7 +128,7 @@ def main(config):
         if 'save' in config and config.save.get('save_autoawq', False):
             for modality_config in modality_configs:
                 assert (
-                    modality_config.weight.bit in [4] and 'act' not in modality_config
+                        modality_config.weight.bit in [4] and 'act' not in modality_config
                 ), 'AutoAWQ supports only 4-bit weight-only quantization.'
                 assert (
                     not modality_config.weight.symmetric
@@ -144,7 +141,7 @@ def main(config):
         if 'save' in config and config.save.get('save_mlcllm', False):
             for modality_config in modality_configs:
                 assert (
-                    modality_config.weight.bit in [4] and 'act' not in modality_config
+                        modality_config.weight.bit in [4] and 'act' not in modality_config
                 ), 'MlcLLM supports only 4-bit weight-only quantization.'
                 assert (
                     not modality_config.weight.symmetric
@@ -182,25 +179,24 @@ if __name__ == '__main__':
         config = yaml.safe_load(file)
     config = EasyDict(config)
 
-    init_process_group(backend='nccl')
+    init_process_group(backend='nccl')  # 进程组初始化与设备设置，初始化分布式进程组，使用 nccl 作为后端，nccl 是 NVIDIA 提供的用于 GPU 之间通信的库，适用于多 GPU 训练。
     torch.cuda.set_device(int(os.environ['LOCAL_RANK']))
 
     if int(os.environ['RANK']) != 0:
         logger.remove()
 
-    check_config(config)
+    check_config(config)  # 调用 check_config 函数检查配置文件的有效性。
 
-    logger.info(f'args: {args}')
-    logger.info(f'config:\n{json.dumps(config, ensure_ascii=False, indent=4)}')
+    logger.info(f'args: {args}')  # 记录命令行参数信息。
+    logger.info(f'config:\n{json.dumps(config, ensure_ascii=False, indent=4)}')  # 打印重要 Python 包的版本信息，便于调试和复现实验。
 
     print_important_package_version()
 
-    logger.info(f'WORLD_SIZE : {int(os.environ["WORLD_SIZE"])}')
+    logger.info(f'WORLD_SIZE : {int(os.environ["WORLD_SIZE"])}')  # 记录全局进程数量
 
     seed_all(config.base.seed + int(os.environ['RANK']))
-
     # Ensure only the main process creates directories
-    if int(os.environ['RANK']) == 0:
+    if int(os.environ['RANK']) == 0:  # 只有主进程（排名为 0）会执行目录创建操作
         if 'save' in config:
             if config.save.get('save_trans', False):
                 save_trans_path = os.path.join(
@@ -244,13 +240,13 @@ if __name__ == '__main__':
                 mkdirs(save_fake_path)
 
     # Synchronize all processes after directory creation
-    dist.barrier()
+    dist.barrier()  # 调用 dist.barrier 函数进行进程同步，确保所有进程都等待主进程完成目录创建操作后再继续执行后续代码。
 
     main(config)
 
-    destroy_process_group()
+    destroy_process_group()  # 销毁分布式进程组，释放相关资源。
 
     llmc_end_time = time.time()
-    llmc_duration_time = llmc_end_time - llmc_start_time
+    llmc_duration_time = llmc_end_time - llmc_start_time  # 计算任务执行时长。
     logger.info(f'llmc_duration_time: {llmc_duration_time} s')
     logger.info('--- llmc finished ---')
