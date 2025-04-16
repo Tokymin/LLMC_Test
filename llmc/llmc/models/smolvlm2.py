@@ -3,6 +3,8 @@ from llmc.utils.registry_factory import MODEL_REGISTRY
 from .base_model import BaseModel
 from transformers import AutoConfig, SmolVLMForConditionalGeneration
 from loguru import logger
+from accelerate import Accelerator, DistributedType
+from typing import Optional, Union
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 # from .smolvlm_model import SmolVLMAutoModelForCausalLM
 from llmc.compression.quantization.module_utils import (

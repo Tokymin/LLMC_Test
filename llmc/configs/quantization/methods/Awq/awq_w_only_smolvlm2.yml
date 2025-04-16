@@ -1,8 +1,8 @@
 base:
     seed: &seed 42
 model:
-    type: SmolVLM2
-    path: /mnt/share/toky/LLMs/SmolVLM2-2.2B-Instruct/
+    type: SmolVLM2 #【SmolLM，SmolVLM2】
+    path: /mnt/share/toky/LLMs/SmolVLM2-2.2B-Instruct/ #【/mnt/share/toky/LLMs/SmolVLM2-2.2B-Instruct/，/mnt/share/toky/LLMs/SmolLM-135M-Instruct/】
     tokenizer_mode: slow
     torch_dtype: auto
 calib:
@@ -25,20 +25,36 @@ eval:
     bs: 1
     inference_per_block: False
 quant:
-    method: Awq
-    weight:
-        bit: 4
-        symmetric: True
-        granularity: per_group
-        group_size: 192
-    special:
-        trans: True
-        # The options for "trans_version" include "v1" and "v2".
-        # But their results don't differ significantly.
-        trans_version: v2
-        weight_clip: True
-        # For 2-bit quantization, setting "clip_sym: False" will yield better results.
-        clip_sym: True
+    language:
+        method: Awq
+        weight:
+            bit: 4
+            symmetric: True
+            granularity: per_group
+            group_size: 128
+        special:
+            trans: True
+            # The options for "trans_version" include "v1" and "v2".
+            # But their results don't differ significantly.
+            trans_version: v2
+            weight_clip: True
+            # For 2-bit quantization, setting "clip_sym: False" will yield better results.
+            clip_sym: True
+    vision:
+        method: Awq
+        weight:
+            bit: 4
+            symmetric: True
+            granularity: per_group
+            group_size: 128
+        special:
+            trans: True
+            # The options for "trans_version" include "v1" and "v2".
+            # But their results don't differ significantly.
+            trans_version: v2
+            weight_clip: True
+            # For 2-bit quantization, setting "clip_sym: False" will yield better results.
+            clip_sym: True
 save:
     save_trans: False
     save_fake: False
