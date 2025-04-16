@@ -30,7 +30,7 @@ quant:
         bit: 4
         symmetric: True
         granularity: per_group
-        group_size: 128
+        group_size: 192
     special:
         trans: True
         # The options for "trans_version" include "v1" and "v2".
@@ -40,7 +40,7 @@ quant:
         # For 2-bit quantization, setting "clip_sym: False" will yield better results.
         clip_sym: True
 save:
-    save_trans: True
+    save_trans: False
     save_fake: False
-    save_vllm: True
+    save_vllm: False
     save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/SmolVLM2

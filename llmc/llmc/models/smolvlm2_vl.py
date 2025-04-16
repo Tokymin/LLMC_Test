@@ -164,4 +164,5 @@ class SmolVLM2(BaseModel):
         # 定义文本块的命名前缀（与LLaMA一致）
         self.block_name_prefix = 'text_model.layers'
         self.pairs = {'q_proj': 'qkv', 'o_proj': 'out', 'up_proj': 'fc1'}
+
     # 保持与BaseModel接口兼容的其他方法（如需可补充视觉处理逻辑）
