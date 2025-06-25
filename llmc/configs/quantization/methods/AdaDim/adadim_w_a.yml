@@ -8,10 +8,10 @@ model:
 calib:
     name: c4
     download: False
-    path: /mnt/share/toky/Datasets/allenai/c4
+    path: /mnt/share/toky/Datasets/LLMC/c4/
     n_samples: 128
     bs: 1
-    seq_len: 2048
+    seq_len: 512
     preproc: c4_gptq
     seed: *seed
 eval:
