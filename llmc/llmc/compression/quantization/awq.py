@@ -13,9 +13,11 @@ from .utils import is_fp8_supported_gpu
 
 if is_fp8_supported_gpu():
     from .kernel import weight_cast_to_bf16, weight_cast_to_fp8
+
     logger.info('import kernel successful.')
 else:
     from .quant import weight_cast_to_bf16, weight_cast_to_fp8
+
     logger.info('import quant successful.')
 
 from .module_utils import (_LLMC_LINEAR_TYPES_, _LLMC_LN_TYPES_,
@@ -28,7 +30,8 @@ from .utils import check_do_quant, check_w_only, get_aquantizer, get_wquantizer
 class Awq(BaseBlockwiseQuantization):
     def __init__(self, model, quant_config, input, padding_mask, config):
         super().__init__(model, quant_config, input, padding_mask, config)
-        special_config = self.quant_config.get('special', {})
+        special_config = self.quant_config.get('special',
+                                               {})  # 从量化配置的special部分获取一些特殊配置，如是否进行变换、变换版本、是否保存缩放因子、批量大小和是否节省内存等。
         self.trans = special_config.get('trans', True)
         self.trans_version = special_config.get('trans_version', 'v2')
         self.save_scale = special_config.get('save_scale', False)
@@ -37,14 +40,16 @@ class Awq(BaseBlockwiseQuantization):
 
     @torch.no_grad()
     def scaling_weight(self, w, scales, is_gqa):
-        if is_gqa:
+        # 该方法用于对权重进行缩放。
+        if is_gqa:  # 如果是 GQA（Grouped Query Attention），则调用repeat_gqa_scales方法对缩放因子进行处理。
             scales_tmp = self.repeat_gqa_scales(scales)
         else:
-            scales_tmp = scales
+            scales_tmp = scales  # 最后将权重与缩放因子相乘并返回。
         w.mul_(scales_tmp.view(1, -1))
         return w
 
     def get_weight_scale(self, layers_dict):
+        # 计算权重的缩放因子。
         layers = list(layers_dict.values())
         total_scale = None
         first_layer_name = list(layers_dict.keys())[0]
@@ -57,9 +62,9 @@ class Awq(BaseBlockwiseQuantization):
             self.wquantizer,
         )
 
-        for idx, _m in enumerate(layers):
+        for idx, _m in enumerate(layers):  # 遍历layers_dict中的所有层，
             if _m.weight.data.dtype == torch.float8_e4m3fn:
-                weight = weight_cast_to_bf16(_m.weight.data,
+                weight = weight_cast_to_bf16(_m.weight.data,  # 根据层的权重数据类型进行处理。
                                              _m.weight_scale_inv.data).to(torch.bfloat16)
             else:
                 weight = _m.weight.data.clone()
@@ -68,32 +73,34 @@ class Awq(BaseBlockwiseQuantization):
             abs_weights = reshaped.abs()
             max_vals = abs_weights.amax(dim=1, keepdim=True)
             layer_scale = abs_weights.div_(max_vals)
-            layer_scale = layer_scale.view(org_shape)
+            layer_scale = layer_scale.view(org_shape)  # 对权重进行重塑、取绝对值、求最大值等操作，计算每层的缩放因子
             if total_scale is None:
                 total_scale = layer_scale.mean(0)
             else:
                 total_scale.add_(layer_scale.mean(0))
-            del weight, reshaped, abs_weights, max_vals, layer_scale
+            del weight, reshaped, abs_weights, max_vals, layer_scale  # 最后将所有层的缩放因子求平均并返回
             torch.cuda.empty_cache()
 
         return total_scale.div_(len(layers))
 
     def get_act_scale(self, x):
-        if x.shape[0] == self._bs:
-            return x.abs().view(-1, x.shape[-1]).mean(0)
-        else:
+        # 计算激活值的缩放因子
+        if x.shape[0] == self._bs:  # 输入的批量大小等于预设的批量大小，
+            return x.abs().view(-1, x.shape[-1]).mean(0)  # 则直接计算激活值的绝对值的平均值
+        else:  # 否则，
             batch_means = []
-            b_num = x.shape[0] // self._bs
-            for num in range(b_num):
+            b_num = x.shape[0] // self._bs  # 将输入按批量大小分割，
+            for num in range(b_num):  # 分别计算每个批量的激活值的绝对值的平均值，
                 batch_x = x[num * self._bs:(num + 1) * self._bs]
                 batch_mean = batch_x.abs().view(-1, batch_x.shape[-1]).mean(0)
                 batch_means.append(batch_mean)
-            final_mean = sum(batch_means) / len(batch_means)
+            final_mean = sum(batch_means) / len(batch_means)  # 最后求平均并返回。
             return final_mean
 
     @torch.no_grad()
     def get_scales(self, prev_op, x, w_max, is_gqa, ratio):
-        if is_gqa:
+        # 该方法用于计算缩放因子
+        if is_gqa:  # 如果是 GQA，则对输入进行前一层操作，并计算前一层的权重缩放因子。
             x_tmp = prev_op(x)
             w_tmp = self.get_weight_scale({'prev_op': prev_op})
         else:
@@ -101,7 +108,7 @@ class Awq(BaseBlockwiseQuantization):
             w_tmp = w_max
 
         x_tmp = self.get_act_scale(x_tmp)
-
+        # 根据变换版本和是否为 GQA，使用不同的公式计算缩放因子。
         if self.trans_version == 'v1' and not is_gqa:
             scales = (
                 (x_tmp.pow(ratio) / w_tmp.pow(1 - ratio))
@@ -111,17 +118,18 @@ class Awq(BaseBlockwiseQuantization):
         elif self.trans_version == 'v2' or is_gqa:
             scales = x_tmp.pow(ratio).clamp(min=1e-4).view(-1)
 
-        scales = scales / (scales.max() * scales.min()).sqrt()
+        scales = scales / (scales.max() * scales.min()).sqrt()  # 最后对缩放因子进行归一化处理并返回。
         return scales
 
     def inspect_module_forward(self, x, inspect_module, kwargs):
-        if self._bs == x.shape[0]:
+        # 该方法用于前向传播。
+        if self._bs == x.shape[0]:  # 如果输入的批量大小等于预设的批量大小，则直接进行前向传播。
             with torch.no_grad():
                 out = inspect_module(x, **kwargs)
                 if isinstance(out, tuple):
                     out = out[0]
             return out
-        else:
+        else:  # 否则，将输入按批量大小分割，分别进行前向传播，最后将结果拼接并返回。
             outs = []
             b_num = x.shape[0] // self._bs
             for num in range(b_num):
@@ -134,11 +142,14 @@ class Awq(BaseBlockwiseQuantization):
 
     @torch.no_grad()
     def get_original_out(self, x, inspect_module, subset_kwargs):
+        # 该方法用于获取原始输出
         with torch.no_grad():
-            org_out = self.inspect_module_forward(x, inspect_module, subset_kwargs)
+            org_out = self.inspect_module_forward(x, inspect_module,
+                                                  subset_kwargs)  # 调用inspect_module_forward方法进行前向传播并返回结果
         return org_out
 
     def calculate_loss(self, org_out, out):
+        # 计算损失
         if out.shape[0] == self._bs:
             return (org_out - out).float().pow(2).mean().item()
         else:
@@ -152,13 +163,14 @@ class Awq(BaseBlockwiseQuantization):
             return total_loss / b_num
 
     def fake_quantize_weight(self, fc, scales, is_gqa, layer_name):
-        if fc.weight.data.dtype == torch.float8_e4m3fn:
+        # 对权重进行伪量化
+        if fc.weight.data.dtype == torch.float8_e4m3fn: # 根据权重的数据类型进行处理，
             tmp_weight_data = weight_cast_to_bf16(fc.weight.data,
                                                   fc.weight_scale_inv.data).to(torch.bfloat16)
         else:
             tmp_weight_data = fc.weight.data
 
-        tmp_weight_data = self.scaling_weight(tmp_weight_data, scales, is_gqa)
+        tmp_weight_data = self.scaling_weight(tmp_weight_data, scales, is_gqa) #调用scaling_weight方法对权重进行缩放
         tmp_weight_data = get_wquantizer(
             self.block_idx,
             layer_name,
@@ -200,13 +212,13 @@ class Awq(BaseBlockwiseQuantization):
 
     @torch.no_grad()
     def search_scale_subset(
-        self,
-        prev_op,
-        layers_dict,
-        input,
-        inspect_module,
-        is_gqa,
-        subset_kwargs
+            self,
+            prev_op,
+            layers_dict,
+            input,
+            inspect_module,
+            is_gqa,
+            subset_kwargs
     ):
 
         if self.awq_bs is None:
@@ -247,11 +259,11 @@ class Awq(BaseBlockwiseQuantization):
                 x_tmp = self.scaling_input(x, scales, is_gqa)
 
                 if not check_w_only(
-                    self.block_idx,
-                    list(layers_dict.keys())[0],
-                    self.mix_bits_map,
-                    self.quantizer_mix_bits,
-                    self.w_only,
+                        self.block_idx,
+                        list(layers_dict.keys())[0],
+                        self.mix_bits_map,
+                        self.quantizer_mix_bits,
+                        self.w_only,
                 ):
                     x_tmp = self.fake_quantize_input(x_tmp, layers_dict)
 
@@ -288,8 +300,8 @@ class Awq(BaseBlockwiseQuantization):
 
         # Identify the rank with the minimum loss
         global_best_rank = torch.tensor([dist.get_rank()
-                                        if abs(best_error - global_best_error) < 1e-5
-                                        else -1],
+                                         if abs(best_error - global_best_error) < 1e-5
+                                         else -1],
                                         device='cuda')
         dist.all_reduce(global_best_rank, op=dist.ReduceOp.MAX)
         global_best_rank = global_best_rank.item()
@@ -326,10 +338,10 @@ class Awq(BaseBlockwiseQuantization):
 
     @torch.no_grad()
     def subset_transform(
-        self,
-        subset,
-        input_feat,
-        subset_kwargs,
+            self,
+            subset,
+            input_feat,
+            subset_kwargs,
     ):
         layers_dict = subset['layers']
         prev_op = subset['prev_op']
@@ -341,10 +353,10 @@ class Awq(BaseBlockwiseQuantization):
             return
 
         if not check_do_quant(
-            self.block_idx,
-            list(layers_dict.keys())[0],
-            self.mix_bits_map,
-            self.quantizer_mix_bits,
+                self.block_idx,
+                list(layers_dict.keys())[0],
+                self.mix_bits_map,
+                self.quantizer_mix_bits,
         ):
             logger.info(
                 'This subset is set to float. No need to transform this subset.'
@@ -356,7 +368,7 @@ class Awq(BaseBlockwiseQuantization):
                 return
 
         assert (
-            len(prev_op) in (0, 1)
+                len(prev_op) in (0, 1)
         ), 'Only support single prev_op. If multi prev_ops, code need to be updated.'
 
         if len(prev_op) == 0 or (len(prev_op) == 1 and prev_op[0] is None):
@@ -364,21 +376,21 @@ class Awq(BaseBlockwiseQuantization):
             return
 
         if isinstance(
-            prev_op[0],
-            tuple(
-                _LLMC_LN_TYPES_ +
-                _TRANSFORMERS_LN_TYPES_ +
-                _LLMC_LINEAR_TYPES_ +
-                _TRANSFORMERS_LINEAR_TYPES_
-            ),
+                prev_op[0],
+                tuple(
+                    _LLMC_LN_TYPES_ +
+                    _TRANSFORMERS_LN_TYPES_ +
+                    _LLMC_LINEAR_TYPES_ +
+                    _TRANSFORMERS_LINEAR_TYPES_
+                ),
         ):
             layers = list(layers_dict.values())
 
             if (
-                isinstance(prev_op[0], (nn.Linear, FakeQuantLinear))
-                and prev_op[0].out_features != layers[0].in_features * 3
-                and prev_op[0].out_features != layers[0].in_features * 2
-                and prev_op[0].out_features != layers[0].in_features
+                    isinstance(prev_op[0], (nn.Linear, FakeQuantLinear))
+                    and prev_op[0].out_features != layers[0].in_features * 3
+                    and prev_op[0].out_features != layers[0].in_features * 2
+                    and prev_op[0].out_features != layers[0].in_features
             ):
 
                 if self.has_gqa and self.do_gqa_trans:

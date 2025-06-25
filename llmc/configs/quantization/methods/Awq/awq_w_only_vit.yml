@@ -2,7 +2,7 @@ base:
     seed: &seed 42
 model:
     type: Vit
-    path: /mnt/nvme1/yongyang/models/vit-base-patch16-224
+    path: /mnt/share/toky/LLMs/vit-base-patch16-224
     tokenizer_mode: fast
     torch_dtype: auto
 calib:

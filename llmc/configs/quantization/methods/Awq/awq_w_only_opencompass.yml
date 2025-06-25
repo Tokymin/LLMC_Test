@@ -42,7 +42,7 @@ quant:
 save:
     save_trans: False
     save_fake: False
-    save_path: /path/to/save/
+    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/awq_w_only_opencompass
 
 opencompass:
     # eval_base.py for base model, eval_chat.py for chat model. configs can be found in llmc/configs/opencompass.
