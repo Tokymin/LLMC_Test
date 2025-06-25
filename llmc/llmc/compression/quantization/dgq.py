@@ -16,6 +16,11 @@ class DGQ(BaseBlockwiseQuantization):
     def __init__(self, model, quant_config, input, padding_mask, config):
         super().__init__(model, quant_config, input, padding_mask, config)
         self.model_dtype = next(self.model.model.parameters()).dtype
+        self.true_sequential = quant_config.get("true_sequential", False)
+        self.act_static = quant_config.act.get("static", False)
+        self.mixed_precision = quant_config.act.get("mixed_precision", False)
+        self.mix_bits = quant_config.act.get("mix_bits", False)
+        self.modality = quant_config.act.get("modality", 'language')
 
     def w_qdq(self, module, wquantizer):
         scales = module.buf_scales
@@ -139,6 +144,15 @@ class DGQ(BaseBlockwiseQuantization):
         w_out_channels, w_in_channels = weight_tmp.shape
         input_feat = input_feat.to(device)
         input_feat = input_feat.squeeze()
+        # 根据层类型或通道数调整分组大小
+        if w_in_channels % self.wquantizer_w4.group_size == 0:
+            w4_group_size = self.wquantizer_w4.group_size
+        else:
+            # 对于不兼容的层，使用 per_channel 粒度（group_size=1）
+            w4_group_size = 1
+            print(
+                f"警告: 层 {layer.__class__.__name__} 的输入通道数 {w_in_channels} 与配置的分组大小不兼容，将使用 per_channel 粒度")
+
         assert w_in_channels % w4_group_size == 0
         best_scales = torch.ones(
             [w_out_channels, w_in_channels // w4_group_size],
@@ -198,8 +212,15 @@ class DGQ(BaseBlockwiseQuantization):
                 weight_OxG_fq = self.wquantizer_w4_perchannel.quant_dequant(
                     weight_OxG, scales, zeros, qmax, qmin
                 )
+                # 获取激活量化器（假设已在类中初始化）
+
                 if not self.w_only:
-                    inp_LxG_fq = self.a_qdq(inp_LxG)
+                    # 假设 layer 是当前处理的模块，self.act_quantizer 是激活量化器
+                    inp_LxG_fq = self.a_qdq(
+                        act=inp_LxG,  # 激活值张量
+                        module=layer,  # 当前处理的模块
+                        aquantizer=self.aquantizer # 激活量化器
+                    )
                 else:
                     inp_LxG_fq = inp_LxG
                 out_LxO = inp_LxG_fq @ (weight_OxG_fq.t())
@@ -245,7 +266,11 @@ class DGQ(BaseBlockwiseQuantization):
             )
 
             if not self.w_only:
-                input_feat_fq = self.a_qdq(input_feat)
+                input_feat_fq = self.a_qdq(
+                        act=input_feat,  # 激活值张量
+                        module=layer,  # 当前处理的模块
+                        aquantizer=self.aquantizer # 激活量化器
+                    )
             else:
                 input_feat_fq = input_feat
 

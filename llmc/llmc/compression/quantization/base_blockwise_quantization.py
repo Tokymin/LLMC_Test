@@ -464,16 +464,15 @@ class BaseBlockwiseQuantization(BlockwiseOpt):
 
     def block_opt(self, block):
 
-        if self.quant_kvcache:
+        if hasattr(self, 'quant_kvcache') and self.quant_kvcache:
             self.register_kv_cache(block)
 
         block = block.cuda()
         named_linears = self.model.get_block_linears(block)
         extra_modules = self.model.get_extra_modules(block)
-
-        if self.quant_attn:
+        if hasattr(self, 'quant_attn') and self.quant_attn:
             self.replace_attention(block, extra_modules)
-        if self.quant_act_fn:
+        if hasattr(self, 'quant_act_fn') and self.quant_act_fn:
             self.replace_act_fn(block, extra_modules)
 
         input_feat_modules = {
@@ -537,8 +536,7 @@ class BaseBlockwiseQuantization(BlockwiseOpt):
     def block_transform(self, block, input_feat, block_kwargs):
         logger.info(f'Start transform the {self.block_idx}-th block')
         subsets = self.model.get_subsets_in_block(block)
-
-        if self.act_static:
+        if hasattr(self, 'act_static') and self.act_static:
             self.register_non_linear_qparams(block, input_feat)
 
         self.set_non_linear_mode('fake_quant', block, False)

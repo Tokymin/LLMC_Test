@@ -4,6 +4,7 @@ model:
     type: SmolLM
     path: /mnt/share/toky/LLMs/SmolLM-135M-Instruct/
     torch_dtype: auto
+    modality: language
 calib:
     name: wikitext2
     download: False
@@ -25,12 +26,14 @@ eval:
     inference_per_block: False
 quant:
     method: DGQ
+    true_sequential: False
+    mixed_precision: True
     weight:
         w_1:
             bit: 4
             symmetric: False
             granularity: per_group
-            group_size: 128
+            group_size: 16
         w_2:
             bit: 8
             symmetric: True
@@ -39,7 +42,10 @@ quant:
         bit: 8
         symmetric: True
         granularity: per_token
+        static: False  # 新增：是否使用静态激活量化
+        mix_bits: False  # 新增
+
 save:
     save_trans: False
     save_fake: False
-    save_path: /path/to/save/
+    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/SmolLM-135M-Instruct-dgq_w_a

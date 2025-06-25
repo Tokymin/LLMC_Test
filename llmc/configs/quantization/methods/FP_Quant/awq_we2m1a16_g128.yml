@@ -7,7 +7,7 @@ model:
 calib:
     name: pileval
     download: False
-    path: calib data path
+    path: /mnt/share/toky/Datasets/LLMC/pileval/
     n_samples: 128
     bs: -1
     seq_len: 512
@@ -17,7 +17,7 @@ eval:
     eval_pos: [pretrain, transformed, fake_quant]
     name: wikitext2
     download: False
-    path: eval data path
+    path: /mnt/share/toky/Datasets/LLMC/wikitext2/
     seq_len: 2048
     # For 7B / 13B model eval, bs can be set to "1", and inference_per_block can be set to "False".
     # For 70B model eval, bs can be set to "20", and inference_per_block can be set to "True".
@@ -41,6 +41,6 @@ quant:
         # For 2-bit quantization, setting "clip_sym: False" will yield better results.
         clip_sym: True
 save:
-    save_trans: False
+    save_trans: True
     save_fake: False
-    save_path: /path/to/save/
+    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/
