@@ -280,7 +280,7 @@ class BaseBlockwiseQuantization(BlockwiseOpt):
             kv_quant_type = self.quant_config['kvcache'].get('quant_type', 'int-quant')
             self.kv_module = KV_REGISTRY[self.quant_config['kvcache']['method']](
                 kv_quant_type, self.quant_config['kvcache'],
-                self.model.model_config.text_config.num_hidden_layers, **kv_special_cfg, **act_static_cfg
+                self.model.model_config.get_text_config().num_hidden_layers, **kv_special_cfg, **act_static_cfg
             )
             self.quant_kvcache = True
             self.model.kvcache_buffer.append(self.kv_module)
@@ -326,7 +326,7 @@ class BaseBlockwiseQuantization(BlockwiseOpt):
                 self.config['model']['type'] in ['Opt', 'Llama']
             ), 'Please set online_rotate=False'
             self.fp32_had = special_config.get('fp32_had', False)
-        self.hidden_size = self.model.model_config.text_config.hidden_size
+        self.hidden_size = self.model.model_config.get_text_config().hidden_size
         self.set_model_config()
         self.modality = self.quant_config.modality
         logger.info(f'self.quant_objects : {self.quant_config.modality}')
@@ -342,13 +342,13 @@ class BaseBlockwiseQuantization(BlockwiseOpt):
         logger.info(f'self.do_gqa_trans : {self.do_gqa_trans}')
 
     def set_model_config(self):
-        self.hidden_size = self.model.model_config.text_config.hidden_size
-        self.num_heads = self.model.model_config.text_config.num_attention_heads
+        self.hidden_size = self.model.model_config.get_text_config().hidden_size
+        self.num_heads = self.model.model_config.get_text_config().num_attention_heads
         self.head_dim = self.hidden_size // self.num_heads
-        if hasattr(self.model.model_config.text_config, 'intermediate_size'):
-            self.intermediate_size = self.model.model_config.text_config.intermediate_size
-        if hasattr(self.model.model_config.text_config, 'num_key_value_heads'):
-            self.num_key_value_heads = self.model.model_config.text_config.num_key_value_heads
+        if hasattr(self.model.model_config.get_text_config(), 'intermediate_size'):
+            self.intermediate_size = self.model.model_config.get_text_config().intermediate_size
+        if hasattr(self.model.model_config.get_text_config(), 'num_key_value_heads'):
+            self.num_key_value_heads = self.model.model_config.get_text_config().num_key_value_heads
             self.num_key_value_groups = self.num_heads // self.num_key_value_heads
             if self.num_key_value_groups > 1:
                 self.has_gqa = True

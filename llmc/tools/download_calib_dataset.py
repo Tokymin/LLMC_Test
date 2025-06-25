@@ -9,7 +9,9 @@ import os
 from datasets import load_dataset
 from loguru import logger
 import os
+
 os.environ['HF_ENDPOINT'] = 'alpha.hf-mirror.com'
+
 
 def download(calib_dataset_name, path):
     if 'pileval' in calib_dataset_name:
@@ -19,7 +21,7 @@ def download(calib_dataset_name, path):
         logger.info('download pileval for calib finished.')
     if 'c4' in calib_dataset_name:
         calib_dataset = load_dataset(
-            'allenai/c4',
+            '/mnt/share/toky/Datasets/allenai/c4/',
             data_files={'train': 'en/c4-train.00000-of-01024.json.gz'},
             split='train',
         )
@@ -52,7 +54,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dataset_name',
         type=str,
-        default=['pileval'],#, 'c4', 'wikitext2', 'ptb', 'ultrachat'
+        default=['c4'],  # , 'c4', 'wikitext2', 'ptb', 'ultrachat','pileval'
         nargs='*',
     )
     parser.add_argument('--save_path', type=str, required=True)
