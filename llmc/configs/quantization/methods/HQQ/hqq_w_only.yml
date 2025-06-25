@@ -1,14 +1,14 @@
 base:
     seed: &seed 42
 model:
-    type: model_type
-    path: model path
+    type: SmolLM
+    path: /mnt/share/toky/LLMs/SmolLM-135M-Instruct/
     torch_dtype: auto
 eval:
     eval_pos: [pretrain, fake_quant]
     name: wikitext2
     download: False
-    path: eval data path
+    path: /mnt/share/toky/Datasets/LLMC/wikitext2/
     seq_len: 2048
     # For 7B / 13B model eval, bs can be set to "1", and inference_per_block can be set to "False".
     # For 70B model eval, bs can be set to "20", and inference_per_block can be set to "True".
@@ -20,7 +20,7 @@ quant:
         bit: 4
         symmetric: False
         granularity: per_group
-        group_size: 128
+        group_size: 16
         round_zp: False
     special:
         axis : 0
@@ -30,4 +30,4 @@ quant:
         iters : 20
 save:
     save_fake: False
-    save_path: /path/to/save/
+    save_path: /mnt/share/toky/Projects/LLMC_Test/llmc_quantized/SmolLM-135M-Instruct-hqq_w_only
